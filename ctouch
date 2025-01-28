@@ -1,0 +1,116 @@
+#!/bin/bash
+
+usage() {
+    echo "Usage: ctouch [options] <filename>"
+    echo "Options:"
+    echo "  -h, --help            Show this help message"
+    echo "  -f, --filename        Specify the filename explicitly"
+    echo "  --header <headers>    Include additional header files (e.g., --header stdio ctype)"
+    echo "  -o, --overwrite       Overwrite the file if it exists"
+    echo "  --no-main             Create the file without a main function"
+    echo "  -k, --keep-extension  Keep the provided filename extension, do not append .c"
+}
+
+# Default values
+includeHeaders=()
+overwrite=false
+noMain=false
+keepExtension=false
+
+defaultHeaders=("stdio") # Default headers to include
+
+# Parse options
+filename=""
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        -f|--filename)
+            shift
+            if [[ -z "$1" || $1 == -* ]]; then
+                >&2 echo "Error: Missing or invalid filename after -f/--filename."
+                usage
+                exit 1
+            fi
+            filename=$1
+            shift
+            ;;
+        --header)
+            shift
+            while [[ $# -gt 0 && $1 != -* ]]; do
+                includeHeaders+=("$1")
+                shift
+            done
+            ;;
+        -o|--overwrite)
+            overwrite=true
+            shift
+            ;;
+        --no-main)
+            noMain=true
+            shift
+            ;;
+        -k|--keep-extension)
+            keepExtension=true
+            shift
+            ;;
+        *)
+            if [[ -z "$filename" && $1 != -* ]]; then
+                filename=$1
+                shift
+            else
+                >&2 echo "Error: Invalid option or multiple filenames provided."
+                >&2 echo "Hint: Use -f or --filename to explicitly specify the filename if this error occurs."
+                usage
+                exit 1
+            fi
+            ;;
+    esac
+done
+
+# valid filename?
+if [[ -z "$filename" ]]; then
+    >&2 echo "Error: No filename provided."
+    >&2 echo "Hint: Use -f or --filename to explicitly specify the filename."
+    usage
+    exit 1
+fi
+
+# Determine file path
+if [[ "$keepExtension" == true || "$filename" == *.c ]]; then
+    filePath="$filename"
+else
+    filePath="${filename}.c"
+fi
+
+# Prompt overwrite if file exists
+if [[ -f "$filePath" && "$overwrite" == false ]]; then
+    >&2 echo "Error: File $filePath already exists. Use --overwrite to overwrite."
+    exit 1
+fi
+
+# Avoid header duplication
+allHeaders=("${defaultHeaders[@]}" "${includeHeaders[@]}")
+uniqueHeaders=($(printf "%s\n" "${allHeaders[@]}" | sort | uniq))
+
+# Create the .c file
+{
+    # Add headers (only unique)
+    for header in "${uniqueHeaders[@]}"; do
+        echo "#include <${header}.h>"
+    done
+
+    # main
+    if [[ "$noMain" == false ]]; then
+        echo
+        echo "int main() {"
+        echo "    // Your code here"
+        echo "    return 0;"
+        echo "}"
+    fi
+} > "$filePath"
+
+echo "File $filePath created successfully."
+exit 0
